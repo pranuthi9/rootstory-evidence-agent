@@ -97,7 +97,7 @@ class EvidenceEngine:
                 run,
                 "researcher",
                 "task_completed",
-                f"Research task produced {len(task.claims)} source-backed claims",
+                f"Research task produced {len(task.claims)} candidate claims",
                 {"taskId": task.id},
             )
         except Exception as exc:  # noqa: BLE001 - provider failures must become durable retry state

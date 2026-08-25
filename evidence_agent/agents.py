@@ -1,13 +1,62 @@
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
+import socket
 from typing import Protocol
+from urllib.parse import urlparse
 
+import httpx
 from google import genai
 from google.genai import types
 
 from .models import Claim, Finding, Source
+
+
+def _public_https_url(url: str) -> bool:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        return False
+    try:
+        addresses = {item[4][0] for item in socket.getaddrinfo(parsed.hostname, 443)}
+        return bool(addresses) and all(
+            ipaddress.ip_address(address).is_global for address in addresses
+        )
+    except (OSError, ValueError):
+        return False
+
+
+def _verify_candidate_sources(raw_sources: list[dict], person_name: str) -> list[Source]:
+    """Fetch model-proposed pages and retain only public pages that identify the subject."""
+    verified: list[Source] = []
+    name_tokens = [token.casefold() for token in person_name.split() if len(token) > 2]
+    with httpx.Client(follow_redirects=True, timeout=10, max_redirects=3) as client:
+        for item in raw_sources[:5]:
+            url = str(item.get("url", ""))
+            if not _public_https_url(url):
+                continue
+            try:
+                response = client.get(url, headers={"User-Agent": "RootstoryEvidenceAgent/0.1"})
+                response.raise_for_status()
+                if not _public_https_url(str(response.url)):
+                    continue
+                content_type = response.headers.get("content-type", "")
+                if not any(kind in content_type for kind in ("text/", "application/xhtml+xml")):
+                    continue
+                content = response.text[:1_000_000].casefold()
+                if name_tokens and not all(token in content for token in name_tokens):
+                    continue
+                verified.append(
+                    Source(
+                        title=str(item.get("title") or response.url.host),
+                        url=str(response.url),
+                        publisher=item.get("publisher") or response.url.host,
+                    )
+                )
+            except (httpx.HTTPError, ValueError):
+                continue
+    return verified
 
 
 class EvidenceResearcher(Protocol):
@@ -66,7 +115,9 @@ Use zero claims when reliable evidence cannot be found.
             raw["subject_id"] = finding.subject_id
             # Only evidence returned by the grounding API is trusted. The model cannot
             # promote an arbitrary URL from its generated JSON into a verified source.
-            raw["sources"] = grounded_sources
+            raw["sources"] = grounded_sources or _verify_candidate_sources(
+                raw.get("sources", []), str(person.get("name", ""))
+            )
             claims.append(Claim.model_validate(raw))
         return claims
 

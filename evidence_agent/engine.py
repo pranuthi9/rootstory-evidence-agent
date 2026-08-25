@@ -171,6 +171,8 @@ class EvidenceEngine:
         for task in run.tasks:
             finding = findings[task.finding_id]
             for claim in task.claims:
+                if finding.field and claim.field != finding.field:
+                    continue
                 if not claim.sources or claim.confidence < 0.65:
                     continue
                 current = finding.current_value

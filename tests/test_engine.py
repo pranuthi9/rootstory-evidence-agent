@@ -27,7 +27,20 @@ class FakeResearcher:
                     ],
                     confidence=0.96,
                     rationale="The archive directly identifies the subject.",
-                )
+                ),
+                Claim(
+                    subject_id=person["id"],
+                    field="birthDate",
+                    value="1901-01-01",
+                    sources=[
+                        Source(
+                            title="Example archive",
+                            url="https://example.org/archive/person-1",
+                        )
+                    ],
+                    confidence=0.99,
+                    rationale="Out-of-scope claim returned by a misbehaving specialist.",
+                ),
             ]
         return []
 

@@ -112,12 +112,16 @@ Use zero claims when reliable evidence cannot be found.
                 )
         claims: list[Claim] = []
         for raw in payload.get("claims", []):
+            if finding.field and raw.get("field") != finding.field:
+                continue
             raw["subject_id"] = finding.subject_id
             # Only evidence returned by the grounding API is trusted. The model cannot
             # promote an arbitrary URL from its generated JSON into a verified source.
             raw["sources"] = grounded_sources or _verify_candidate_sources(
                 raw.get("sources", []), str(person.get("name", ""))
             )
+            if finding.field == "sources":
+                raw["value"] = [source.model_dump(mode="json") for source in raw["sources"]]
             claims.append(Claim.model_validate(raw))
         return claims
 

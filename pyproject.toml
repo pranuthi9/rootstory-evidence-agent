@@ -1,0 +1,30 @@
+[project]
+name = "rootstory-evidence-agent"
+version = "0.1.0"
+description = "Autonomous evidence auditing and repair agent for Rootstory family trees"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.116.0,<1",
+  "firebase-admin>=7.1.0,<8",
+  "google-cloud-firestore>=2.21.0,<3",
+  "google-cloud-tasks>=2.19.0,<3",
+  "google-genai>=1.31.0,<2",
+  "pydantic>=2.11.0,<3",
+  "uvicorn[standard]>=0.35.0,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28.0,<1",
+  "pytest>=8.4.0,<9",
+  "pytest-cov>=6.2.0,<7",
+  "ruff>=0.12.0,<1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"

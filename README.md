@@ -204,3 +204,6 @@ OIDC identity and a Secret Manager-backed worker credential to the internal work
 - [Devpost project story](docs/DEVPOST_SUBMISSION.md)
 - [Four-minute demo script](docs/DEMO_SCRIPT.md)
 - [Architecture diagram](docs/ARCHITECTURE.md)
+- [Public article draft](docs/BLOG_POST_DRAFT.md)
+- [Social post drafts](docs/SOCIAL_POST_DRAFTS.md)
+- [Submission field answers](docs/SUBMISSION_FIELDS.md)

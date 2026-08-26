@@ -45,6 +45,8 @@ def test_start_and_read_audit():
     assert latest.json()["id"] == run_id
 
     hidden = client.get(
-        "/v1/audits", params={"tree_id": "t-api-owned"}, headers={"X-Rootstory-User": "someone-else"}
+        "/v1/audits",
+        params={"tree_id": "t-api-owned"},
+        headers={"X-Rootstory-User": "someone-else"},
     )
     assert hidden.status_code == 404

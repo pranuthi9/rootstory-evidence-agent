@@ -21,6 +21,7 @@ app.add_middleware(
         for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:5173").split(",")
         if origin.strip()
     ],
+    allow_origin_regex=os.getenv("ALLOWED_ORIGIN_REGEX") or None,
     allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["Authorization", "Content-Type", "X-Rootstory-User"],

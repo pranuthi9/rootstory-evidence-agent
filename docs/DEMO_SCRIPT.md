@@ -8,18 +8,30 @@ deployed on Google Cloud. Do not spend the video navigating every Rootstory feat
 Record at 1080p with browser zoom around 90–100%. Prepare one completed audit for reliable review
 footage and a second tree for the live start. Keep the Cloud Console tabs open before recording.
 
-## 0:00–0:25 — Problem and value
+## 0:00–0:35 — Rootstory's origin and the human problem
 
-**Visual:** A Rootstory family tree with several people and its Evidence Agent entry point.
+**Visual:** Begin on Rootstory. Move briefly through a family tree, its family album, and a person or
+story view. End on a tree with the **Evidence Agent** entry point visible.
 
 **Narration:**
 
-> I know my grandparents' names, but very little about the lives behind them. Family trees help us
-> preserve those connections, but a tree can look complete while many people and facts have no
-> evidence. Checking every profile manually takes hours. Rootstory Evidence Agent turns that chore
-> into a durable, autonomous workflow.
+> I know my grandparents' names, but very little about the lives behind them. Someone should have
+> written those stories down. That inspired me to build Rootstory, where families can create trees
+> together and preserve the photos, stories, and discoveries behind each person—not only names and
+> dates. Rootstory existed before this hackathon, and it became the real host platform for the new
+> agent I built here.
 
-## 0:25–0:45 — Give the agent a goal
+## 0:35–0:55 — The problem Rootstory exposed
+
+**Visual:** Pause on several people in a researched tree, then open **Evidence Agent**.
+
+**Narration:**
+
+> As these trees grew, I found a second problem: a tree can look complete while many people and
+> facts still have no evidence. Checking every profile and source manually takes hours. Families
+> should not have to choose between an engaging story and a trustworthy record.
+
+## 0:55–1:10 — Give the agent a goal
 
 **Visual:** Open **Evidence Agent** on the prepared live-start tree. Show the introductory state,
 then start the check.
@@ -30,7 +42,7 @@ then start the check.
 > reads the whole tree, identifies gaps, creates research tasks, and continues while I leave the
 > page.
 
-## 0:45–1:25 — Autonomous execution
+## 1:10–1:40 — Autonomous execution
 
 **Visual:** Show the journey steps, current person, progress counters, and several changing agent
 activities. Briefly navigate back to the tree and return to show recovery if timing permits.
@@ -43,7 +55,7 @@ activities. Briefly navigate back to the tree and return to show recovery if tim
 > the verifier rejects claims without sufficient confidence and usable sources. Progress is stored
 > after every task, so a quota error or container restart does not erase completed research.
 
-## 1:25–2:15 — Human-controlled evidence review
+## 1:40–2:20 — Human-controlled evidence review
 
 **Visual:** Switch to the prepared completed audit. Open one source in a new tab, return, show the
 exact affected person and field, select one proposal, leave another pending, and show the final
@@ -56,7 +68,7 @@ apply tray. Apply only the selected evidence.
 > not modify the tree. Only this separate final action applies the selected fields. I can review one
 > discovery now, leave the others pending, and come back later.
 
-## 2:15–2:40 — Result in the tree
+## 2:20–2:40 — Result in the tree
 
 **Visual:** Return to the affected person's profile in the tree and show the newly attached source.
 

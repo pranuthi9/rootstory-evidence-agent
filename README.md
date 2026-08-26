@@ -17,6 +17,17 @@ choose **Evidence Agent**)
 
 ![Rootstory Evidence Agent architecture](docs/architecture.png)
 
+## Why Rootstory
+
+Rootstory began with a personal gap: knowing my grandparents' names, but very little about the
+lives behind them. The host application helps families build trees together and preserve the
+photos, stories, discoveries, and sources connected to each person.
+
+As those trees grew, another gap became clear. A tree can look complete without showing which
+people, dates, or relationships have reliable support. Rootstory Evidence Agent is the new
+hackathon-built layer that audits that foundation, performs the repetitive evidence research, and
+returns understandable changes for the family to control.
+
 ## Workflow
 
 1. `POST /v1/audits` snapshots a tree and queues an audit.

@@ -32,17 +32,42 @@ before the hackathon and is disclosed as the host platform.
 ### Inspiration
 
 I know my grandparents' names, but very little about the lives behind those names. Someone should
-have written their stories down. I started Rootstory to make that easier for families today, so the
-next generation does not inherit the same gaps.
+have written their stories down.
 
-But preserving family history introduces another problem: a family tree can look complete while
-many of its people, dates, and relationships have little or no evidence. Checking every person is
-slow, repetitive work. It requires finding gaps, opening many sources, deciding which claims are
-credible, and carefully updating the tree without turning a guess into family history.
+That absence inspired me to build Rootstory: a place where families can create and explore family
+trees together, preserve photographs and stories, and make those memories available to the next
+generation. A family tree should be more than a diagram of names and dates. It should create moments
+like:
 
-That is the job I built Rootstory Evidence Agent to handle.
+- “I never knew my grandfather did that.”
+- “I found a story from a cousin I had never met.”
+- “I discovered a connection between two branches of our family.”
+- “I am preserving something my children can return to.”
+
+Rootstory organizes those memories around the people and relationships in a family tree. Families
+can keep a tree private, collaborate with invited relatives, or publish selected history for others
+to explore. Photos, personal stories, biographical details, and historical sources give each person
+a life beyond a box in a diagram.
+
+Rootstory itself predates this hackathon and serves as the real host platform for this submission.
+Building it exposed the new problem I chose to solve during the hackathon.
+
+As trees grew—especially trees created or enriched through research—I saw that completeness and
+trust were not the same thing. A tree could contain dozens of people and still leave an important
+question unanswered: **What evidence supports these names, dates, and connections?**
+
+Checking every person manually is slow, repetitive work. It requires finding gaps, opening many
+sources, deciding which claims are credible, and carefully updating the tree without turning a
+guess into family history. Families should not have to choose between an engaging story and a
+trustworthy record.
+
+That is why I built Rootstory Evidence Agent: to give every family tree an autonomous evidence team
+that can do the heavy research while leaving the final judgment with the family.
 
 ### What it does
+
+Rootstory is where the family experiences the history; the Evidence Agent works behind the scenes
+to strengthen the foundation beneath it.
 
 The owner gives the agent one outcome: **strengthen the evidence behind this family tree**. From
 there, the agent runs a complete asynchronous workflow:

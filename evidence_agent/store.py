@@ -17,6 +17,9 @@ class EvidenceStore(ABC):
     def get_run(self, run_id: str) -> AuditRun | None: ...
 
     @abstractmethod
+    def get_latest_run(self, tree_id: str, owner_id: str) -> AuditRun | None: ...
+
+    @abstractmethod
     def save_tree(self, tree: TreeSnapshot) -> None: ...
 
     @abstractmethod
@@ -37,6 +40,16 @@ class MemoryEvidenceStore(EvidenceStore):
         with self._lock:
             run = self._runs.get(run_id)
             return deepcopy(run) if run else None
+
+    def get_latest_run(self, tree_id: str, owner_id: str) -> AuditRun | None:
+        with self._lock:
+            matches = [
+                run
+                for run in self._runs.values()
+                if run.tree_id == tree_id and run.owner_id == owner_id
+            ]
+            latest = max(matches, key=lambda run: run.created_at, default=None)
+            return deepcopy(latest) if latest else None
 
     def save_tree(self, tree: TreeSnapshot) -> None:
         with self._lock:
@@ -62,6 +75,15 @@ class FirestoreEvidenceStore(EvidenceStore):
     def get_run(self, run_id: str) -> AuditRun | None:
         snapshot = self._runs.document(run_id).get()
         return AuditRun.model_validate(snapshot.to_dict()) if snapshot.exists else None
+
+    def get_latest_run(self, tree_id: str, owner_id: str) -> AuditRun | None:
+        snapshots = self._runs.where("tree_id", "==", tree_id).stream()
+        matches = [
+            AuditRun.model_validate(snapshot.to_dict())
+            for snapshot in snapshots
+            if snapshot.to_dict().get("owner_id") == owner_id
+        ]
+        return max(matches, key=lambda run: run.created_at, default=None)
 
     def save_tree(self, tree: TreeSnapshot) -> None:
         self._trees.document(tree.id).set(tree.model_dump(mode="json"))

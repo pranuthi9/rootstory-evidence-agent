@@ -97,6 +97,14 @@ def start_audit(
     return run
 
 
+@app.get("/v1/audits")
+def get_latest_audit(tree_id: str, user_id: str = Depends(authenticated_user)):
+    run = store.get_latest_run(tree_id, user_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="No audit found for this tree")
+    return run
+
+
 @app.get("/v1/audits/{run_id}")
 def get_audit(run_id: str, user_id: str = Depends(authenticated_user)):
     run = store.get_run(run_id)

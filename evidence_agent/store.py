@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from copy import deepcopy
+from datetime import UTC, datetime
+from hashlib import sha256
+from math import ceil
 from threading import Lock
 
 from google.cloud import firestore
 
 from .models import AuditRun, TreeSnapshot
+from .quotas import HOUR_MS, QuotaExceeded, current_window, person_research_reservation
 
 
 class EvidenceStore(ABC):
@@ -68,6 +72,62 @@ class FirestoreEvidenceStore(EvidenceStore):
         self._db = firestore.Client(project=project)
         self._runs = self._db.collection("evidenceAuditRuns")
         self._trees = self._db.collection("evidenceTreeSnapshots")
+
+    def reserve_audit_start(self, user_id: str, tree_id: str) -> bool:
+        """Verify actual ownership and reserve bounded work across all instances."""
+        owner_ref = self._db.collection("familyTrees").document(tree_id)
+        user_key = sha256(user_id.encode()).hexdigest()
+        user_usage = self._db.collection("aiUsage").document(user_key)
+        user_override = self._db.collection("aiQuotaOverrides").document(user_key)
+        global_limit = self._db.collection("rateLimits").document("global_evidenceAuditStart")
+
+        @firestore.transactional
+        def reserve(transaction):
+            tree = owner_ref.get(transaction=transaction)
+            if not tree.exists or tree.to_dict().get("userId") != user_id:
+                raise PermissionError("Not the stored tree owner")
+            usage = user_usage.get(transaction=transaction)
+            override = user_override.get(transaction=transaction)
+            global_snapshot = global_limit.get(transaction=transaction)
+            now_ms = int(datetime.now(UTC).timestamp() * 1000)
+
+            # Preserve the existing global counter's seconds-based schema.
+            global_window = current_window(
+                global_snapshot.to_dict() if global_snapshot.exists else None,
+                HOUR_MS / 1000,
+                now_ms / 1000,
+            )
+            blocked = None
+            try:
+                next_usage = person_research_reservation(
+                    user_id,
+                    usage.to_dict() if usage.exists else None,
+                    override.to_dict() if override.exists else None,
+                    now_ms,
+                )
+            except QuotaExceeded as exc:
+                blocked = exc
+
+            if global_window["count"] >= 100:
+                retry = ceil(global_window["windowStart"] + 3600 - now_ms / 1000)
+                blocked = QuotaExceeded(
+                    "Research is busy. Please try again later.",
+                    max(retry, blocked.retry_after_seconds if blocked else 1),
+                )
+            if blocked:
+                raise blocked
+
+            # All ownership/policy/global checks finish before either write.
+            # Merging keeps usage from the host API's other AI actions intact.
+            transaction.set(
+                user_usage,
+                {"userId": user_id, "actions": {"personResearch": next_usage}},
+                merge=True,
+            )
+            transaction.set(global_limit, {**global_window, "count": global_window["count"] + 1})
+            return True
+
+        return reserve(self._db.transaction())
 
     def save_run(self, run: AuditRun) -> None:
         self._runs.document(run.id).set(run.model_dump(mode="json"))

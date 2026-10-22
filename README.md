@@ -199,6 +199,32 @@ unit. A provider failure can therefore be retried without losing completed work.
 Production uses Firebase ID-token verification (`AUTH_MODE=firebase`). Cloud Tasks sends both an
 OIDC identity and a Secret Manager-backed worker credential to the internal work endpoint.
 
+Browser API calls also require a Firebase App Check token in `X-Firebase-AppCheck`.
+Starting research requires a verified email and ownership of the stored `familyTrees` document.
+Firestore transactions share the host API's `personResearch` allowance: 5 starts per account per
+hour and 10 per day by default. Temporary administrator-configured allowances use the shared
+`aiQuotaOverrides` policy; administrators have the same limits without an explicit override.
+Hourly and daily usage in `aiUsage` is preserved when overrides expire or are cleared. The hard
+service-wide limit remains 100 audit starts per hour. Exhausted allowances return HTTP 429 with
+the applicable `Retry-After`, including daily waits. Limits fail closed if durable storage or a
+valid policy is unavailable. Audit snapshots allow up to 500 people and
+2,000 relationships, and POST bodies are limited to 1 MiB. Local header authentication is rejected
+on Cloud Run. Each audit retains all findings but researches at most 20 highest-priority gaps;
+remaining gaps are deferred with an event explaining the limit. Each task has at most three
+persisted provider attempts, including crash recovery, so an audit makes at most 60 provider calls
+when the worker queue has one concurrent dispatch. Preserve `AUTH_MODE=firebase`,
+`EVIDENCE_STORE=firestore`, and
+`WORK_DISPATCH=cloud_tasks` when deploying; no additional environment variable enables these guards.
+
+The security tests run with `pytest`. To also verify concurrent quotas against a local Firestore
+emulator, run the following from this repository with the host app's Firebase configuration:
+
+```bash
+firebase emulators:exec --config ../rootstory/firebase.json --only firestore \
+  --project demo-rootstory-evidence-abuse-tests \
+  "python -m pytest tests/test_start_limits.py"
+```
+
 ## Submission materials
 
 - [Devpost project story](docs/DEVPOST_SUBMISSION.md)

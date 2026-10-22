@@ -20,6 +20,8 @@ from .models import (
 from .store import EvidenceStore
 
 CORE_FIELDS = ("name", "birthDate", "deathDate", "birthPlace")
+MAX_RESEARCH_TASKS = 20
+MAX_RESEARCH_ATTEMPTS = 3
 
 
 class EvidenceEngine:
@@ -42,6 +44,11 @@ class EvidenceEngine:
         run.status = RunStatus.AUDITING
         run.metrics_before = self._metrics(tree)
         run.findings = self._audit(tree)
+        research_findings = [
+            finding
+            for finding in sorted(run.findings, key=lambda item: item.priority, reverse=True)
+            if finding.kind in {FindingKind.MISSING_CITATION, FindingKind.MISSING_FACT}
+        ]
         run.tasks = [
             ResearchTask(
                 run_id=run.id,
@@ -49,9 +56,18 @@ class EvidenceEngine:
                 subject_id=finding.subject_id,
                 objective=finding.description,
             )
-            for finding in sorted(run.findings, key=lambda item: item.priority, reverse=True)
-            if finding.kind in {FindingKind.MISSING_CITATION, FindingKind.MISSING_FACT}
+            for finding in research_findings[:MAX_RESEARCH_TASKS]
         ]
+        deferred = len(research_findings) - len(run.tasks)
+        if deferred:
+            self._event(
+                run,
+                "planner",
+                "research_deferred",
+                f"This audit researches the first {MAX_RESEARCH_TASKS} highest-priority gaps; "
+                f"{deferred} additional findings are deferred to a future audit",
+                {"deferredFindings": deferred, "taskBudget": MAX_RESEARCH_TASKS},
+            )
         run.status = RunStatus.RESEARCHING if run.tasks else RunStatus.COMPLETED
         self._event(
             run,
@@ -74,6 +90,14 @@ class EvidenceEngine:
         task = task or next((item for item in run.tasks if item.status == TaskStatus.QUEUED), None)
         if task is None:
             return self._finish_verification(run)
+        # A crashed worker can leave RUNNING state after its final provider call.
+        # Check the persisted allowance before every call, including crash recovery.
+        if task.attempt_count >= MAX_RESEARCH_ATTEMPTS:
+            task.status = TaskStatus.FAILED
+            task.error = "Research task reached its attempt limit"
+            task.updated_at = utc_now()
+            self._event(run, "system", "task_failed", task.error, {"taskId": task.id})
+            return self._complete_work_step(run)
         tree = self._require_tree(run.tree_id)
         person = next((item for item in tree.people if item.get("id") == task.subject_id), None)
         finding = next(item for item in run.findings if item.id == task.finding_id)
@@ -81,8 +105,7 @@ class EvidenceEngine:
             task.status = TaskStatus.FAILED
             task.error = "Subject no longer exists in the tree"
             self._event(run, "researcher", "task_failed", task.error, {"taskId": task.id})
-            self._save(run)
-            return run
+            return self._complete_work_step(run)
 
         task.status = TaskStatus.RUNNING
         task.attempt_count += 1
@@ -101,7 +124,11 @@ class EvidenceEngine:
                 {"taskId": task.id},
             )
         except Exception as exc:  # noqa: BLE001 - provider failures must become durable retry state
-            task.status = TaskStatus.QUEUED if task.attempt_count < 3 else TaskStatus.FAILED
+            task.status = (
+                TaskStatus.QUEUED
+                if task.attempt_count < MAX_RESEARCH_ATTEMPTS
+                else TaskStatus.FAILED
+            )
             task.error = str(exc)
             self._event(
                 run,
@@ -110,8 +137,11 @@ class EvidenceEngine:
                 "Research provider failed; progress was preserved",
                 {"taskId": task.id, "attempt": task.attempt_count},
             )
+        return self._complete_work_step(run)
+
+    def _complete_work_step(self, run: AuditRun) -> AuditRun:
         self._save(run)
-        if not any(item.status == TaskStatus.QUEUED for item in run.tasks):
+        if not any(item.status in {TaskStatus.QUEUED, TaskStatus.RUNNING} for item in run.tasks):
             return self._finish_verification(run)
         return run
 

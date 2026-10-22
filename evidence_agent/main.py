@@ -5,15 +5,19 @@ import secrets
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .agents import GeminiEvidenceResearcher, NullEvidenceResearcher
-from .auth import authenticated_user
+from .auth import authenticated_user, firebase_auth_required
 from .dispatch import CloudTasksDispatcher
 from .engine import EvidenceEngine
+from .middleware import RequestSizeLimitMiddleware
 from .models import DecisionRequest, RunStatus, StartAuditRequest
+from .quotas import QuotaExceeded
 from .store import FirestoreEvidenceStore, MemoryEvidenceStore
 
 app = FastAPI(title="Rootstory Evidence Agent", version="0.1.0")
+app.add_middleware(RequestSizeLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -24,7 +28,8 @@ app.add_middleware(
     allow_origin_regex=os.getenv("ALLOWED_ORIGIN_REGEX") or None,
     allow_credentials=False,
     allow_methods=["GET", "POST"],
-    allow_headers=["Authorization", "Content-Type", "X-Rootstory-User"],
+    allow_headers=["Authorization", "Content-Type", "X-Rootstory-User", "X-Firebase-AppCheck"],
+    expose_headers=["Retry-After"],
 )
 store = (
     FirestoreEvidenceStore(project=os.getenv("GOOGLE_CLOUD_PROJECT"))
@@ -89,6 +94,27 @@ def start_audit(
     user_id: str = Depends(authenticated_user),
 ):
     require_owner(request.tree.owner_id, user_id)
+    if firebase_auth_required():
+        if not isinstance(store, FirestoreEvidenceStore):
+            raise HTTPException(status_code=503, detail="Durable research limits are unavailable")
+        try:
+            store.reserve_audit_start(user_id, request.tree.id)
+        except QuotaExceeded as exc:
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": {
+                        "code": exc.code,
+                        "message": str(exc),
+                        "retryAfterSeconds": exc.retry_after_seconds,
+                    }
+                },
+                headers={"Retry-After": str(exc.retry_after_seconds)},
+            )
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail="Tree owner authorization failed") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="Research limits are unavailable") from exc
     run = engine.start(request.tree, request.auto_apply_safe)
     if dispatcher:
         dispatcher.dispatch(run.id)
@@ -118,7 +144,7 @@ def get_audit(run_id: str, user_id: str = Depends(authenticated_user)):
 def work_audit(run_id: str, x_evidence_worker_token: str | None = Header(default=None)):
     """Perform one idempotent unit of work; intended for authenticated Cloud Tasks calls."""
     expected_token = os.getenv("EVIDENCE_WORKER_TOKEN")
-    if dispatcher and (
+    if (dispatcher or os.getenv("K_SERVICE")) and (
         not expected_token
         or not x_evidence_worker_token
         or not secrets.compare_digest(expected_token, x_evidence_worker_token)

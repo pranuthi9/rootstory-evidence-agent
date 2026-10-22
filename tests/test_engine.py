@@ -1,6 +1,8 @@
+import pytest
+
 from evidence_agent.engine import EvidenceEngine
 from evidence_agent.evaluation import evaluate_run
-from evidence_agent.models import Claim, RunStatus, Source, TreeSnapshot
+from evidence_agent.models import Claim, RunStatus, Source, TaskStatus, TreeSnapshot
 from evidence_agent.store import MemoryEvidenceStore
 
 
@@ -118,3 +120,107 @@ def test_dangling_relationship_is_flagged_but_not_silently_deleted():
 
     assert any(finding.kind == "dangling_relationship" for finding in planned.findings)
     assert store.get_tree("tree-1").relationships == tree.relationships
+
+
+def test_planner_caps_paid_tasks_and_keeps_all_findings_in_stable_priority_order():
+    tree = TreeSnapshot(
+        id="large-tree",
+        owner_id="owner",
+        people=[{"id": f"person-{index}"} for index in range(30)],
+        relationships=[],
+    )
+    engine = EvidenceEngine(MemoryEvidenceStore(), FakeResearcher())
+    planned = engine.plan(engine.start(tree).id)
+
+    assert len(planned.findings) == 120
+    assert len(planned.tasks) == 20
+    assert [task.subject_id for task in planned.tasks] == [f"person-{index}" for index in range(20)]
+    findings_by_id = {finding.id: finding for finding in planned.findings}
+    assert all(findings_by_id[task.finding_id].priority == 90 for task in planned.tasks)
+    deferred = next(event for event in planned.events if event.type == "research_deferred")
+    assert deferred.data == {"deferredFindings": 100, "taskBudget": 20}
+
+
+def test_always_failing_provider_cannot_exceed_sixty_attempts_per_audit():
+    class FailingResearcher:
+        calls = 0
+
+        def research(self, person, finding):
+            self.calls += 1
+            raise RuntimeError("provider unavailable")
+
+    researcher = FailingResearcher()
+    engine = EvidenceEngine(MemoryEvidenceStore(), researcher)
+    tree = TreeSnapshot(
+        id="large-tree",
+        owner_id="owner",
+        people=[{"id": str(index), "name": "Example"} for index in range(500)],
+        relationships=[],
+    )
+    completed = run_to_pause(engine, engine.start(tree).id)
+
+    assert researcher.calls == 60
+    assert len(completed.tasks) == 20
+    assert all(
+        task.attempt_count == 3 and task.status == TaskStatus.FAILED for task in completed.tasks
+    )
+    assert completed.status == RunStatus.COMPLETED
+
+
+def test_crash_recovery_stops_after_three_persisted_provider_attempts():
+    class WorkerCrash(BaseException):
+        pass
+
+    class CrashingResearcher:
+        calls = 0
+
+        def research(self, person, finding):
+            self.calls += 1
+            raise WorkerCrash()
+
+    store = MemoryEvidenceStore()
+    researcher = CrashingResearcher()
+    engine = EvidenceEngine(store, researcher)
+    tree = sample_tree()
+    tree.people[0]["birthPlace"] = "London"
+    run = engine.plan(engine.start(tree).id)
+    assert len(run.tasks) == 1
+
+    for _ in range(3):
+        with pytest.raises(WorkerCrash):
+            EvidenceEngine(store, researcher).work_next(run.id)
+
+    completed = EvidenceEngine(store, researcher).work_next(run.id)
+    assert researcher.calls == 3
+    assert completed.tasks[0].attempt_count == 3
+    assert completed.tasks[0].status == TaskStatus.FAILED
+    assert completed.status == RunStatus.COMPLETED
+    engine.work_next(run.id)
+    assert researcher.calls == 3
+
+
+def test_exhausted_running_task_preserves_the_next_queued_task():
+    class CountingResearcher:
+        calls = 0
+
+        def research(self, person, finding):
+            self.calls += 1
+            return []
+
+    store = MemoryEvidenceStore()
+    researcher = CountingResearcher()
+    engine = EvidenceEngine(store, researcher)
+    run = engine.plan(engine.start(sample_tree()).id)
+    assert len(run.tasks) == 2
+    run.tasks[0].status = TaskStatus.RUNNING
+    run.tasks[0].attempt_count = 3
+    store.save_run(run)
+
+    resumed = engine.work_next(run.id)
+    assert researcher.calls == 0
+    assert resumed.tasks[0].status == TaskStatus.FAILED
+    assert resumed.tasks[1].status == TaskStatus.QUEUED
+    assert resumed.status == RunStatus.RESEARCHING
+    completed = engine.work_next(run.id)
+    assert researcher.calls == 1
+    assert completed.status == RunStatus.COMPLETED

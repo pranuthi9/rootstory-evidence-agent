@@ -136,10 +136,10 @@ class AuditRun(BaseModel):
 
 
 class TreeSnapshot(BaseModel):
-    id: str
-    owner_id: str
-    people: list[dict[str, Any]]
-    relationships: list[dict[str, Any]]
+    id: str = Field(min_length=1, max_length=128, pattern=r"^[^/]+$")
+    owner_id: str = Field(min_length=1, max_length=128)
+    people: list[dict[str, Any]] = Field(max_length=500)
+    relationships: list[dict[str, Any]] = Field(max_length=2000)
 
 
 class StartAuditRequest(BaseModel):
